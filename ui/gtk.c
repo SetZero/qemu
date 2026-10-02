@@ -191,6 +191,33 @@ static bool gd_grab_on_hover(GtkDisplayState *s)
     return gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(s->grab_on_hover_item));
 }
 
+/*
+ * The window whose cursor is the guest's. A GtkDrawingArea has its own, but
+ * a GtkGLArea has none: gtk_widget_get_window() returns the toplevel's, and
+ * a cursor set there also hides the pointer over the menu bar and the tabs.
+ * What a GtkGLArea does have is an input-only window it registers at realize
+ * for its events, which covers exactly the area, so the cursor goes there.
+ */
+static GdkWindow *gd_cursor_window(VirtualConsole *vc)
+{
+    GtkWidget *area = vc->gfx.drawing_area;
+    GdkWindow *window = gtk_widget_get_window(area);
+    GList *child;
+
+    if (gtk_widget_get_has_window(area)) {
+        return window;
+    }
+    for (child = gdk_window_peek_children(window); child; child = child->next) {
+        gpointer owner;
+
+        gdk_window_get_user_data(child->data, &owner);
+        if (owner == area) {
+            return child->data;
+        }
+    }
+    return window;
+}
+
 static void gd_update_cursor(VirtualConsole *vc)
 {
     GtkDisplayState *s = vc->s;
@@ -205,7 +232,7 @@ static void gd_update_cursor(VirtualConsole *vc)
         return;
     }
 
-    window = gtk_widget_get_window(GTK_WIDGET(vc->gfx.drawing_area));
+    window = gd_cursor_window(vc);
     if (s->full_screen || qemu_input_is_absolute(vc->gfx.dcl.con) || s->ptr_owner == vc) {
         gdk_window_set_cursor(window, s->null_cursor);
     } else {
@@ -484,7 +511,7 @@ static void gd_cursor_define(DisplayChangeListener *dcl,
     cursor = gdk_cursor_new_from_pixbuf
         (gtk_widget_get_display(vc->gfx.drawing_area),
          pixbuf, c->hot_x, c->hot_y);
-    gdk_window_set_cursor(gtk_widget_get_window(vc->gfx.drawing_area), cursor);
+    gdk_window_set_cursor(gd_cursor_window(vc), cursor);
     g_object_unref(pixbuf);
     g_object_unref(cursor);
 }

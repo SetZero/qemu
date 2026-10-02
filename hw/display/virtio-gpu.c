@@ -1573,6 +1573,10 @@ static void virtio_gpu_reset_bh(void *opaque)
         dpy_gfx_replace_surface(g->parent_obj.scanout[i].con, NULL);
     }
 
+    if (vgc->reset_scanouts) {
+        vgc->reset_scanouts(g);
+    }
+
     g->reset_finished = true;
     qemu_cond_signal(&g->reset_cond);
 }

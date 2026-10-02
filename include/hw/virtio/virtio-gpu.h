@@ -231,6 +231,8 @@ struct VirtIOGPUClass {
     void (*resource_destroy)(VirtIOGPU *g,
                              struct virtio_gpu_simple_resource *res,
                              Error **errp);
+    /* Called by the reset bottom half, in the main thread. */
+    void (*reset_scanouts)(VirtIOGPU *g);
 };
 
 /* VirtIOGPUGL renderer states */

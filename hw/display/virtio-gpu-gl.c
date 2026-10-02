@@ -101,9 +101,26 @@ static void virtio_gpu_gl_handle_ctrl(VirtIODevice *vdev, VirtQueue *vq)
     virtio_gpu_virgl_fence_poll(g);
 }
 
+/*
+ * Disabling a scanout makes the display switch surfaces, which calls GL
+ * with the display's context. That context can only be made current in the
+ * main thread (WGL refuses a context current in another thread, and GL then
+ * dispatches to NULL; EGL binds it to the other thread, and the main thread
+ * can never make it current again), so this runs from the reset bottom half
+ * rather than from virtio_gpu_gl_reset(), which a guest's status write calls
+ * in a vCPU thread.
+ */
+static void virtio_gpu_gl_reset_scanouts(VirtIOGPU *g)
+{
+    VirtIOGPUGL *gl = VIRTIO_GPU_GL(g);
+
+    if (gl->renderer_state == RS_INITED) {
+        virtio_gpu_virgl_reset_scanout(g);
+    }
+}
+
 static void virtio_gpu_gl_reset(VirtIODevice *vdev)
 {
-    VirtIOGPU *g = VIRTIO_GPU(vdev);
     VirtIOGPUGL *gl = VIRTIO_GPU_GL(vdev);
 
     virtio_gpu_reset(vdev);
@@ -113,7 +130,6 @@ static void virtio_gpu_gl_reset(VirtIODevice *vdev)
      * thread, and when the renderer is unblocked.
      */
     if (gl->renderer_state == RS_INITED) {
-        virtio_gpu_virgl_reset_scanout(g);
         gl->renderer_state = RS_RESET;
     }
 }
@@ -193,6 +209,7 @@ static void virtio_gpu_gl_class_init(ObjectClass *klass, const void *data)
     vgc->handle_ctrl = virtio_gpu_gl_handle_ctrl;
     vgc->process_cmd = virtio_gpu_virgl_process_cmd;
     vgc->update_cursor_data = virtio_gpu_gl_update_cursor_data;
+    vgc->reset_scanouts = virtio_gpu_gl_reset_scanouts;
 
     vdc->realize = virtio_gpu_gl_device_realize;
     vdc->unrealize = virtio_gpu_gl_device_unrealize;
